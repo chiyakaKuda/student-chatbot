@@ -46,8 +46,12 @@ def whatsapp_reply():
 
     # Process the state
     if state['step'] == 'start':
-        message.body(f"Welcome {profile_name}! Please enter your student ID to sign in.")
-        state['step'] = 'get_student_id'
+        if is_signed_in(sender_number):
+            state['step'] = 'signed_in'
+            message.body(f"Welcome back, {state['profile_name']}! How can I assist you today?")
+        else:
+            message.body(f"Welcome {profile_name}! Please enter your student ID to sign in.")
+            state['step'] = 'get_student_id'
     elif state['step'] == 'get_student_id':
         state['student_id'] = incoming_msg
         message.body("Please enter your program.")
@@ -70,7 +74,8 @@ def whatsapp_reply():
         elif 'results' in incoming_msg:
             message.body("Please provide the semester for which you need the results. e.g., 'Results Spring2023'")
         elif 'status' in incoming_msg:
-            message.body(f"{profile_name}, here is your status...")
+            status_result = get_status(state['student_id'])
+            message.body(status_result)
         else:
             message.body("Invalid command. You can ask for your 'schedule', 'results', or 'status'.")
     else:
@@ -92,6 +97,14 @@ def sign_in_student(student_id, program, year):
     conn.commit()
     conn.close()
     return f"Welcome {student_id}! You have successfully signed in."
+
+def is_signed_in(sender_number):
+    conn = sqlite3.connect('students.db')
+    c = conn.cursor()
+    c.execute('SELECT signed_in FROM students WHERE student_id = ?', (sender_number,))
+    student = c.fetchone()
+    conn.close()
+    return student and student[0] == 1
 
 def get_schedule(student_id, incoming_msg):
     parts = incoming_msg.split()
@@ -128,6 +141,18 @@ def get_results(student_id, incoming_msg):
         return f"Your GPA for {semester} is: {result[0]}"
     else:
         return f"No results found for {semester}."
+
+def get_status(student_id):
+    conn = sqlite3.connect('students.db')
+    c = conn.cursor()
+    c.execute('SELECT student_id, program, year FROM students WHERE student_id = ?', (student_id,))
+    student = c.fetchone()
+    conn.close()
+    
+    if student:
+        return f"Student ID: {student[0]}\nProgram: {student[1]}\nYear: {student[2]}"
+    else:
+        return "No status found for your account."
 
 if __name__ == '__main__':
     init_db()
